@@ -1,5 +1,6 @@
 package com.isharpever.common.id.snowflake.controller;
 
+import com.isharpever.common.id.snowflake.dto.IdComponent;
 import com.isharpever.common.id.snowflake.provider.IdServiceProvider;
 import javax.annotation.Resource;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +15,8 @@ public class IdServiceController {
 
     @RequestMapping("/getOne")
     public Long getId() {
-        return idServiceProvider.getId();
+        long id = idServiceProvider.getId();
+        IdComponent idComponent = IdComponent.parse(id);
+        return id;
     }
 }

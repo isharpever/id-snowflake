@@ -1,6 +1,6 @@
 package com.isharpever.common.id.snowflake.manager;
 
-import com.isharpever.tool.utils.DateUtil;
+import com.isharpever.common.id.snowflake.constant.IdConstant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLongArray;
@@ -12,15 +12,19 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class IdServiceManager {
 
-    private static final int BITS_OF_TIMESTAMP = 41;
-    private static final int BITS_OF_MACHINEID = 10;
-    private static final int BITS_OF_SEQUENCEID = 12;
-    private static final long START_TIMESTAMP = DateUtil.getTmFromString("2015-06-01 00:00:00");
+    private static final int BITS_OF_TIMESTAMP = IdConstant.BITS_OF_TIMESTAMP;
+    private static final int BITS_OF_IDC = IdConstant.BITS_OF_IDC;
+    private static final int BITS_OF_MACHINEID = IdConstant.BITS_OF_MACHINEID;
+    private static final int BITS_OF_SEQUENCEID = IdConstant.BITS_OF_SEQUENCEID;
+    private static final long START_TIMESTAMP = IdConstant.START_TIMESTAMP;
     private static final int SLOT_NUM = 128;
-    private static final AtomicLongArray slots = new AtomicLongArray(SLOT_NUM);
+    private static final AtomicLongArray SLOTS = new AtomicLongArray(SLOT_NUM);
 
     @Resource
     private MachineIdManager machineIdManager;
+
+    @Resource
+    private DcIdManager dcIdManager;
 
     public Long getId() {
         while (true) {
@@ -31,7 +35,7 @@ public class IdServiceManager {
             // 若此时间戳所在slot已有id,且其时间戳大于当前时间戳,说明时间回退,则用此id+1作为新id
             // 否则组合新id并放入slot
             int slot = (int)(timestamp & (SLOT_NUM - 1));
-            long preId = slots.get(slot);
+            long preId = SLOTS.get(slot);
             long preTimestamp = preId >> (BITS_OF_MACHINEID + BITS_OF_SEQUENCEID);
             long newId;
             if (preId != 0 && preTimestamp >= timestamp) {
@@ -43,10 +47,13 @@ public class IdServiceManager {
                 }
                 newId = preId + 1;
             } else {
+                short idcId = getIdcId();
                 short machineId = getMachineId();
-                newId = (timestamp << (BITS_OF_MACHINEID + BITS_OF_SEQUENCEID)) | (machineId << BITS_OF_SEQUENCEID);
+                newId = (timestamp << (BITS_OF_IDC + BITS_OF_MACHINEID + BITS_OF_SEQUENCEID))
+                        | (idcId << (BITS_OF_MACHINEID + BITS_OF_SEQUENCEID))
+                        | (machineId << BITS_OF_SEQUENCEID);
             }
-            if (slots.compareAndSet(slot, preId, preId + 1)) {
+            if (SLOTS.compareAndSet(slot, preId, preId + 1)) {
                 return newId;
             }
         }
@@ -61,6 +68,14 @@ public class IdServiceManager {
             result.add(getId());
         }
         return result;
+    }
+
+    /**
+     * 返回机房id
+     * @return
+     */
+    private short getIdcId() {
+        return dcIdManager.getDcId();
     }
 
     /**
